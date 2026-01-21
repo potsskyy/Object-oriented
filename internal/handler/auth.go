@@ -10,29 +10,32 @@ import (
 	"todo/internal/repository"
 )
 
-type AuthHandler struct {
-	repo repository.UserRepo
+// UserHandler отвечает за регистрацию и авторизацию пользователей
+type UserHandler struct {
+	store repository.UserRepo
 }
 
-func NewAuthHandler(repo repository.UserRepo) *AuthHandler {
-	return &AuthHandler{repo: repo}
+// NewUserHandler создаёт новый обработчик пользователей
+func NewUserHandler(store repository.UserRepo) *UserHandler {
+	return &UserHandler{store: store}
 }
 
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+// SignUp регистрирует нового пользователя
+func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
+	var newUser models.User
+	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "failed to hash password", http.StatusInternalServerError)
 		return
 	}
-	user.Password = string(hashed)
+	newUser.Password = string(hashedPassword)
 
-	if err = h.repo.Register(&user); err != nil {
+	if err = h.store.Register(&newUser); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
@@ -40,27 +43,28 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req models.User
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// SignIn выполняет вход пользователя
+func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
+	var loginReq models.User
+	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	stored, err := h.repo.GetUser(req.Username)
+	savedUser, err := h.store.GetUser(loginReq.Username)
 	if err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(stored.Password), []byte(req.Password)); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(savedUser.Password), []byte(loginReq.Password)); err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "username",
-		Value:    req.Username,
+		Name:     "user_session",
+		Value:    loginReq.Username,
 		Path:     "/",
 		HttpOnly: true,
 	})

@@ -5,27 +5,31 @@ import (
 	"net/http"
 )
 
-type contextKey string
+// contextKeyType используется для ключей в контексте
+type contextKeyType string
 
-const UsernameKey contextKey = "username"
+// UserKey ключ для хранения имени пользователя в контексте
+const UserKey contextKeyType = "user_session"
 
-func WithAuth(next http.Handler) http.Handler {
+// AuthRequired проверяет наличие cookie и добавляет имя пользователя в контекст
+func AuthRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("username")
+		cookie, err := r.Cookie("user_session")
 		if err != nil || cookie.Value == "" {
-			http.Error(w, "unauthorized: missing username cookie", http.StatusUnauthorized)
+			http.Error(w, "unauthorized: missing user cookie", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), UsernameKey, cookie.Value)
+		ctx := context.WithValue(r.Context(), UserKey, cookie.Value)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func GetUsername(r *http.Request) string {
-	username, ok := r.Context().Value(UsernameKey).(string)
+// GetUserFromContext возвращает имя пользователя из контекста запроса
+func GetUserFromContext(r *http.Request) string {
+	user, ok := r.Context().Value(UserKey).(string)
 	if !ok {
 		return ""
 	}
-	return username
+	return user
 }

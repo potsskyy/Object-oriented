@@ -2,14 +2,15 @@ package models
 
 import "time"
 
-type Task struct {
-	ID          int64      `json:"id"`
-	Owner       string     `json:"owner"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	IsResolved  bool       `json:"is_resolved"`
-	IsArchived  bool       `json:"is_archived"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
+// Todo представляет задачу пользователя
+type Todo struct {
+	ID         int64      `json:"id"`
+	User       string     `json:"user"`
+	Headline   string     `json:"headline"`
+	Details    string     `json:"details"`
+	Completed  bool       `json:"completed"`
+	Archived   bool       `json:"archived"`
+	CreatedOn  time.Time  `json:"created_on"`
+	UpdatedOn  time.Time  `json:"updated_on"`
+	FinishedOn *time.Time `json:"finished_on,omitempty"`
 }

@@ -12,33 +12,33 @@ import (
 )
 
 const (
-	runAddr = ":8080"
+	serverAddr = ":8080"
 )
 
 func main() {
-	repo := repository.NewMemoryRepo()
+	store := repository.NewMemoryRepo()
 
-	authHandler := handler.NewAuthHandler(repo)
-	taskHandler := handler.NewTaskHandler(repo)
+	userHandler := handler.NewAuthHandler(store)
+	todoHandler := handler.NewTaskHandler(store)
 
-	r := mux.NewRouter()
+	router := mux.NewRouter()
 
-	r.HandleFunc("/register", authHandler.Register).Methods("POST")
-	r.HandleFunc("/login", authHandler.Login).Methods("POST")
+	router.HandleFunc("/register", userHandler.Register).Methods("POST")
+	router.HandleFunc("/login", userHandler.Login).Methods("POST")
 
-	taskRouter := r.PathPrefix("/").Subrouter()
-	taskRouter.Use(middleware.WithAuth)
+	todoRouter := router.PathPrefix("/").Subrouter()
+	todoRouter.Use(middleware.WithAuth)
 
-	taskRouter.HandleFunc("/add", taskHandler.Add).Methods("POST")
-	taskRouter.HandleFunc("/update", taskHandler.Update).Methods("POST")
-	taskRouter.HandleFunc("/resolve/{id}", taskHandler.Resolve).Methods("POST")
-	taskRouter.HandleFunc("/delete/{id}", taskHandler.Delete).Methods("POST")
-	taskRouter.HandleFunc("/get", taskHandler.GetAll).Methods("GET")
-	taskRouter.HandleFunc("/get/{id}", taskHandler.GetByID).Methods("GET")
-	taskRouter.HandleFunc("/archive", taskHandler.GetArchive).Methods("GET")
+	todoRouter.HandleFunc("/add", todoHandler.Add).Methods("POST")
+	todoRouter.HandleFunc("/update", todoHandler.Update).Methods("POST")
+	todoRouter.HandleFunc("/resolve/{id}", todoHandler.Resolve).Methods("POST")
+	todoRouter.HandleFunc("/delete/{id}", todoHandler.Delete).Methods("POST")
+	todoRouter.HandleFunc("/get", todoHandler.GetAll).Methods("GET")
+	todoRouter.HandleFunc("/get/{id}", todoHandler.GetByID).Methods("GET")
+	todoRouter.HandleFunc("/archive", todoHandler.GetArchive).Methods("GET")
 
-	log.Println("Server is running on", runAddr)
-	if err := http.ListenAndServe(runAddr, r); err != nil {
+	log.Println("Server is running on", serverAddr)
+	if err := http.ListenAndServe(serverAddr, router); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }

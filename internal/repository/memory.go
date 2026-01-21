@@ -9,156 +9,163 @@ import (
 )
 
 var (
-	ErrUserExists   = errors.New("user already exists")
-	ErrInvalidLogin = errors.New("invalid username or password")
-	ErrTaskNotFound = errors.New("task not found")
+	ErrAccountExists   = errors.New("account already exists")
+	ErrInvalidAccount  = errors.New("invalid user id or secret")
+	ErrTodoNotFound    = errors.New("todo not found")
 )
 
-type MemoryRepo struct {
-	mu         sync.RWMutex
-	users      map[string]*models.User   // username -> user
-	tasks      map[string][]*models.Task // username -> tasks
-	nextTaskID int64
+// MemoryStore хранит пользователей и задачи в памяти
+type MemoryStore struct {
+	mu        sync.RWMutex
+	accounts  map[string]*models.Account   // user_id -> account
+	todos     map[string][]*models.Todo    // user_id -> todos
+	nextTodoID int64
 }
 
-func NewMemoryRepo() *MemoryRepo {
-	return &MemoryRepo{
-		users:      make(map[string]*models.User),
-		tasks:      make(map[string][]*models.Task),
-		nextTaskID: 1,
+// NewMemoryStore создаёт новый in-memory репозиторий
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{
+		accounts:  make(map[string]*models.Account),
+		todos:     make(map[string][]*models.Todo),
+		nextTodoID: 1,
 	}
 }
 
-func (r *MemoryRepo) Register(user *models.User) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// Register добавляет нового пользователя
+func (m *MemoryStore) Register(account *models.Account) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if _, exists := r.users[user.Username]; exists {
-		return ErrUserExists
+	if _, exists := m.accounts[account.UserID]; exists {
+		return ErrAccountExists
 	}
-	r.users[user.Username] = &models.User{
-		Username: user.Username,
-		Password: user.Password,
+	m.accounts[account.UserID] = &models.Account{
+		UserID: account.UserID,
+		Secret: account.Secret,
 	}
 	return nil
 }
 
-func (r *MemoryRepo) GetUser(username string) (*models.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// GetAccount возвращает пользователя по user_id
+func (m *MemoryStore) GetAccount(userID string) (*models.Account, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	user, ok := r.users[username]
+	acc, ok := m.accounts[userID]
 	if !ok {
-		return nil, ErrInvalidLogin
+		return nil, ErrInvalidAccount
 	}
-	return user, nil
+	return acc, nil
 }
 
-func (r *MemoryRepo) Add(username string, task *models.Task) (int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// AddTodo добавляет новую задачу для пользователя
+func (m *MemoryStore) AddTodo(userID string, todo *models.Todo) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if _, ok := r.users[username]; !ok {
-		return 0, ErrInvalidLogin
+	if _, ok := m.accounts[userID]; !ok {
+		return 0, ErrInvalidAccount
 	}
 
 	now := time.Now()
-	task.ID = r.nextTaskID
-	task.Owner = username // В in-memory избыточно
-	task.CreatedAt = now
-	task.UpdatedAt = now
-	r.nextTaskID++
+	todo.ID = m.nextTodoID
+	todo.User = userID
+	todo.CreatedOn = now
+	todo.UpdatedOn = now
+	m.nextTodoID++
 
-	r.tasks[username] = append(r.tasks[username], task)
-	return task.ID, nil
+	m.todos[userID] = append(m.todos[userID], todo)
+	return todo.ID, nil
 }
 
-func (r *MemoryRepo) Get(username string) ([]*models.Task, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// GetTodos возвращает все активные задачи пользователя
+func (m *MemoryStore) GetTodos(userID string) ([]*models.Todo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	var active []*models.Task
-	for _, task := range r.tasks[username] {
-		if task.IsResolved || task.IsArchived {
+	var active []*models.Todo
+	for _, t := range m.todos[userID] {
+		if t.Completed || t.Archived {
 			continue
 		}
-		active = append(active, task)
+		active = append(active, t)
 	}
 	return active, nil
 }
 
-func (r *MemoryRepo) GetArchive(username string) ([]*models.Task, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// GetArchivedTodos возвращает архивные задачи пользователя
+func (m *MemoryStore) GetArchivedTodos(userID string) ([]*models.Todo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	var archived []*models.Task
-	for _, task := range r.tasks[username] {
-		if !task.IsResolved && !task.IsArchived {
+	var archived []*models.Todo
+	for _, t := range m.todos[userID] {
+		if !t.Completed && !t.Archived {
 			continue
 		}
-		archived = append(archived, task)
+		archived = append(archived, t)
 	}
 	return archived, nil
 }
 
-func (r *MemoryRepo) GetByID(username string, id int64) (*models.Task, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// GetTodoByID возвращает задачу по ID
+func (m *MemoryStore) GetTodoByID(userID string, id int64) (*models.Todo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	for _, task := range r.tasks[username] {
-		if task.ID != id {
-			continue
+	for _, t := range m.todos[userID] {
+		if t.ID == id {
+			return t, nil
 		}
-		return task, nil
 	}
-	return nil, ErrTaskNotFound
+	return nil, ErrTodoNotFound
 }
 
-func (r *MemoryRepo) Update(username string, updated *models.Task) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// UpdateTodo обновляет задачу пользователя
+func (m *MemoryStore) UpdateTodo(userID string, updated *models.Todo) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for _, task := range r.tasks[username] {
-		if task.ID != updated.ID {
-			continue
+	for _, t := range m.todos[userID] {
+		if t.ID == updated.ID {
+			t.Headline = updated.Headline
+			t.Details = updated.Details
+			t.UpdatedOn = time.Now()
+			return nil
 		}
-		task.Title = updated.Title
-		task.Description = updated.Description
-		task.UpdatedAt = time.Now()
-		return nil
 	}
-	return ErrTaskNotFound
+	return ErrTodoNotFound
 }
 
-func (r *MemoryRepo) Resolve(username string, id int64) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// CompleteTodo помечает задачу как выполненную
+func (m *MemoryStore) CompleteTodo(userID string, id int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for _, task := range r.tasks[username] {
-		if task.ID != id {
-			continue
+	for _, t := range m.todos[userID] {
+		if t.ID == id {
+			now := time.Now()
+			t.Completed = true
+			t.Archived = true
+			t.FinishedOn = &now
+			t.UpdatedOn = now
+			return nil
 		}
-		now := time.Now()
-		task.IsResolved = true
-		task.IsArchived = true
-		task.ResolvedAt = &now
-		task.UpdatedAt = now
-		return nil
 	}
-	return ErrTaskNotFound
+	return ErrTodoNotFound
 }
 
-func (r *MemoryRepo) Delete(username string, id int64) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// RemoveTodo архивирует задачу
+func (m *MemoryStore) RemoveTodo(userID string, id int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for _, task := range r.tasks[username] {
-		if task.ID != id {
-			continue
+	for _, t := range m.todos[userID] {
+		if t.ID == id {
+			t.Archived = true
+			t.UpdatedOn = time.Now()
+			return nil
 		}
-		task.IsArchived = true
-		task.UpdatedAt = time.Now()
-		return nil
 	}
-	return ErrTaskNotFound
+	return ErrTodoNotFound
 }

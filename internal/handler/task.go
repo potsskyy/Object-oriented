@@ -12,24 +12,27 @@ import (
 	"todo/internal/repository"
 )
 
-type TaskHandler struct {
-	repo repository.TaskRepo
+// TodoHandler управляет задачами пользователя
+type TodoHandler struct {
+	store repository.TaskRepo
 }
 
-func NewTaskHandler(repo repository.TaskRepo) *TaskHandler {
-	return &TaskHandler{repo: repo}
+// NewTodoHandler создаёт новый обработчик задач
+func NewTodoHandler(store repository.TaskRepo) *TodoHandler {
+	return &TodoHandler{store: store}
 }
 
-func (h *TaskHandler) Add(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// Create добавляет новую задачу
+func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	var todo models.Task
+	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
 		http.Error(w, "invalid task", http.StatusBadRequest)
 		return
 	}
 
-	id, err := h.repo.Add(username, &task)
+	id, err := h.store.Add(user, &todo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -39,16 +42,17 @@ func (h *TaskHandler) Add(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
 
-func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// Modify обновляет существующую задачу
+func (h *TodoHandler) Modify(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	var todo models.Task
+	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
 		http.Error(w, "invalid task", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.repo.Update(username, &task); err != nil {
+	if err := h.store.Update(user, &todo); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -56,8 +60,9 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *TaskHandler) Resolve(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// Complete помечает задачу как выполненную
+func (h *TodoHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -66,15 +71,16 @@ func (h *TaskHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.repo.Resolve(username, id); err != nil {
+	if err = h.store.Resolve(user, id); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// Remove удаляет задачу
+func (h *TodoHandler) Remove(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -83,37 +89,40 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.repo.Delete(username, id); err != nil {
+	if err = h.store.Delete(user, id); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// List возвращает все текущие задачи пользователя
+func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
-	tasks, err := h.repo.Get(username)
+	todos, err := h.store.Get(user)
 	if err != nil {
 		http.Error(w, "error getting tasks", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(tasks)
+	json.NewEncoder(w).Encode(todos)
 }
 
-func (h *TaskHandler) GetArchive(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// Archive возвращает архивные задачи
+func (h *TodoHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
-	tasks, err := h.repo.GetArchive(username)
+	todos, err := h.store.GetArchive(user)
 	if err != nil {
 		http.Error(w, "error getting archive", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(tasks)
+	json.NewEncoder(w).Encode(todos)
 }
 
-func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	username := middleware.GetUsername(r)
+// GetOne возвращает задачу по ID
+func (h *TodoHandler) GetOne(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUsername(r)
 
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -122,10 +131,10 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.repo.GetByID(username, id)
+	todo, err := h.store.GetByID(user, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	json.NewEncoder(w).Encode(task)
+	json.NewEncoder(w).Encode(todo)
 }

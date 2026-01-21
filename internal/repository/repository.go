@@ -2,17 +2,19 @@ package repository
 
 import "todo/internal/models"
 
-type UserRepo interface {
-	Register(user *models.User) error
-	GetUser(username string) (*models.User, error)
+// AccountRepo интерфейс для работы с пользователями
+type AccountRepo interface {
+	Register(account *models.Account) error
+	GetAccount(userID string) (*models.Account, error)
 }
 
-type TaskRepo interface {
-	Add(username string, task *models.Task) (int64, error)
-	Get(username string) ([]*models.Task, error)
-	GetArchive(username string) ([]*models.Task, error)
-	GetByID(username string, id int64) (*models.Task, error)
-	Update(username string, updated *models.Task) error
-	Resolve(username string, id int64) error
-	Delete(username string, id int64) error
+// TodoRepo интерфейс для работы с задачами
+type TodoRepo interface {
+	AddTodo(userID string, todo *models.Todo) (int64, error)
+	GetTodos(userID string) ([]*models.Todo, error)
+	GetArchivedTodos(userID string) ([]*models.Todo, error)
+	GetTodoByID(userID string, id int64) (*models.Todo, error)
+	UpdateTodo(userID string, updated *models.Todo) error
+	CompleteTodo(userID string, id int64) error
+	RemoveTodo(userID string, id int64) error
 }

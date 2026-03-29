@@ -10,21 +10,23 @@ import (
 	"todo/internal/repository"
 )
 
-// UserHandler отвечает за регистрацию и авторизацию пользователей
-type UserHandler struct {
+type AuthHandler struct {
 	store repository.UserRepo
 }
 
-// NewUserHandler создаёт новый обработчик пользователей
-func NewUserHandler(store repository.UserRepo) *UserHandler {
-	return &UserHandler{store: store}
+func NewAuthHandler(store repository.UserRepo) *AuthHandler {
+	return &AuthHandler{store: store}
 }
 
-// SignUp регистрирует нового пользователя
-func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var newUser models.User
 	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if newUser.Username == "" || newUser.Password == "" {
+		http.Error(w, "username and password are required", http.StatusBadRequest)
 		return
 	}
 
@@ -33,9 +35,9 @@ func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to hash password", http.StatusInternalServerError)
 		return
 	}
-	newUser.Password = string(hashedPassword)
 
-	if err = h.store.Register(&newUser); err != nil {
+	newUser.Password = string(hashedPassword)
+	if err := h.store.Register(&newUser); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
@@ -43,11 +45,15 @@ func (h *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-// SignIn выполняет вход пользователя
-func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var loginReq models.User
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if loginReq.Username == "" || loginReq.Password == "" {
+		http.Error(w, "username and password are required", http.StatusBadRequest)
 		return
 	}
 
@@ -57,7 +63,7 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(savedUser.Password), []byte(loginReq.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(savedUser.Password), []byte(loginReq.Password)); err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}

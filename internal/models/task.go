@@ -2,8 +2,7 @@ package models
 
 import "time"
 
-// Todo представляет задачу пользователя
-type Todo struct {
+type Task struct {
 	ID         int64      `json:"id"`
 	User       string     `json:"user"`
 	Headline   string     `json:"headline"`

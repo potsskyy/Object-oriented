@@ -1,22 +1,32 @@
 package repository
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
 
 	"todo/internal/models"
+	"todo/internal/session"
 )
 
 var (
-	ErrUserExists   = errors.New("user already exists")
-	ErrInvalidUser  = errors.New("invalid username or password")
-	ErrTaskNotFound = errors.New("task not found")
+	ErrUserExists     = errors.New("user already exists")
+	ErrInvalidUser    = errors.New("invalid username or password")
+	ErrInvalidSession = errors.New("invalid session")
+	ErrTaskNotFound   = errors.New("task not found")
 )
+
+type userSession struct {
+	Username  string
+	ExpiresAt time.Time
+}
 
 type MemoryRepo struct {
 	mu         sync.RWMutex
 	users      map[string]*models.User
+	sessions   map[string]userSession
 	tasks      map[string][]*models.Task
 	nextTaskID int64
 }
@@ -24,6 +34,7 @@ type MemoryRepo struct {
 func NewMemoryRepo() *MemoryRepo {
 	return &MemoryRepo{
 		users:      make(map[string]*models.User),
+		sessions:   make(map[string]userSession),
 		tasks:      make(map[string][]*models.Task),
 		nextTaskID: 1,
 	}
@@ -55,6 +66,51 @@ func (m *MemoryRepo) GetUser(username string) (*models.User, error) {
 	}
 
 	return user, nil
+}
+
+func (m *MemoryRepo) CreateSession(username string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.users[username]; !ok {
+		return "", ErrInvalidUser
+	}
+
+	sessionID, err := newSessionID()
+	if err != nil {
+		return "", err
+	}
+
+	m.sessions[sessionID] = userSession{
+		Username:  username,
+		ExpiresAt: time.Now().Add(session.TTL),
+	}
+
+	return sessionID, nil
+}
+
+func (m *MemoryRepo) GetUsernameBySession(sessionID string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	savedSession, ok := m.sessions[sessionID]
+	if !ok {
+		return "", ErrInvalidSession
+	}
+
+	if time.Now().After(savedSession.ExpiresAt) {
+		delete(m.sessions, sessionID)
+		return "", ErrInvalidSession
+	}
+
+	return savedSession.Username, nil
+}
+
+func (m *MemoryRepo) DeleteSession(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.sessions, sessionID)
 }
 
 func (m *MemoryRepo) Add(username string, task *models.Task) (int64, error) {
@@ -136,6 +192,15 @@ func (m *MemoryRepo) Update(username string, updated *models.Task) error {
 	}
 
 	return ErrTaskNotFound
+}
+
+func newSessionID() (string, error) {
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(randomBytes), nil
 }
 
 func (m *MemoryRepo) Resolve(username string, id int64) error {

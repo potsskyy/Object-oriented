@@ -7,6 +7,17 @@ type UserRepo interface {
 	GetUser(username string) (*models.User, error)
 }
 
+type SessionRepo interface {
+	CreateSession(username string) (string, error)
+	GetUsernameBySession(sessionID string) (string, error)
+	DeleteSession(sessionID string)
+}
+
+type AuthRepo interface {
+	UserRepo
+	SessionRepo
+}
+
 type TaskRepo interface {
 	Add(username string, task *models.Task) (int64, error)
 	Get(username string) ([]*models.Task, error)

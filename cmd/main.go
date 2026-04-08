@@ -25,9 +25,10 @@ func main() {
 
 	router.HandleFunc("/register", userHandler.Register).Methods("POST")
 	router.HandleFunc("/login", userHandler.Login).Methods("POST")
+	router.HandleFunc("/logout", userHandler.Logout).Methods("POST")
 
 	todoRouter := router.PathPrefix("/").Subrouter()
-	todoRouter.Use(middleware.WithAuth)
+	todoRouter.Use(middleware.WithAuth(store))
 
 	todoRouter.HandleFunc("/add", todoHandler.Add).Methods("POST")
 	todoRouter.HandleFunc("/update", todoHandler.Update).Methods("POST")

@@ -3,18 +3,20 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"todo/internal/models"
 	"todo/internal/repository"
+	"todo/internal/session"
 )
 
 type AuthHandler struct {
-	store repository.UserRepo
+	store repository.AuthRepo
 }
 
-func NewAuthHandler(store repository.UserRepo) *AuthHandler {
+func NewAuthHandler(store repository.AuthRepo) *AuthHandler {
 	return &AuthHandler{store: store}
 }
 
@@ -68,11 +70,39 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionID, err := h.store.CreateSession(loginReq.Username)
+	if err != nil {
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "user_session",
-		Value:    loginReq.Username,
+		Name:     session.CookieName,
+		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
+		MaxAge:   int(session.TTL.Seconds()),
+		Expires:  time.Now().Add(session.TTL),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(session.CookieName)
+	if err == nil && cookie.Value != "" {
+		h.store.DeleteSession(cookie.Value)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     session.CookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	w.WriteHeader(http.StatusOK)
